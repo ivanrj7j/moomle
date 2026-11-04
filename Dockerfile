@@ -8,8 +8,9 @@ COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
 COPY alembic.ini ./
 COPY scripts ./scripts
+COPY adservers_seed.txt ./
 
-ENV PYTHONPATH=/app/src
+ENV PYTHONPATH=/app/src:/app
 
 RUN uv sync --frozen --only-group setup
 

@@ -30,6 +30,8 @@ services:
         condition: service_healthy
     volumes:
       - ./src:/app/src
+      - ./scripts:/app/scripts
+      - ./adservers_seed.txt:/app/adservers_seed.txt:ro
       - migrationsData:/app/migrations
 
 volumes:

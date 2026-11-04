@@ -110,5 +110,5 @@ class AsyncCrawler:
 if __name__ == "__main__":
     import asyncio
 
-    crawler = AsyncCrawler("https://en.wikipedia.org/wiki/Satoru_Gojo")
+    crawler = AsyncCrawler("https://jujutsu-kaisen.fandom.com/wiki/Jujutsu_Kaisen_Wiki")
     asyncio.run(crawler.crawl())
