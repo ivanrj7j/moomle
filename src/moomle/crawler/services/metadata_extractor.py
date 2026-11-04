@@ -11,15 +11,17 @@ from moomle.database.models import PageMetadata
 class MetadataExtractorService(Service):
     def _initTable(self):
         return PageMetadata
-    
-    def _safeGetText(self, soup:BeautifulSoup, selector:str):
+
+    @staticmethod
+    def _safeGetText(soup:BeautifulSoup, selector:str):
         element = soup.select_one(selector)
         if element:
             return element.text
 
         return None
 
-    def _getFaviconURL(self, soup:BeautifulSoup, baseURL:URL):
+    @staticmethod
+    def _getFaviconURL(soup:BeautifulSoup, baseURL:URL):
         favicon = soup.select_one('link[rel="icon"]')
 
         if favicon:
@@ -42,9 +44,9 @@ class MetadataExtractorService(Service):
         content = self.response.content.decode()
         soup = BeautifulSoup(content, "html.parser")
 
-        title = self._safeGetText(soup, "title")
-        description = self._safeGetText(soup, 'meta[name="description"]')
-        faviconURL = self._getFaviconURL(soup, url)
+        title = MetadataExtractorService._safeGetText(soup, "title")
+        description = MetadataExtractorService._safeGetText(soup, 'meta[name="description"]')
+        faviconURL = MetadataExtractorService._getFaviconURL(soup, url)
         parsedAt = time()
 
         return {

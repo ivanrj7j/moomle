@@ -226,4 +226,4 @@ __marimo__/
 
 # APPLICATION SPECIFIC
 
-migrations/versions
+migrations/

@@ -13,7 +13,7 @@ class Service(ABC):
         self.table = self._initTable()
 
     @abstractmethod
-    def _initTable(self):
+    def _initTable(self) -> Base:
         pass
 
     @abstractmethod

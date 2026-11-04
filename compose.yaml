@@ -19,6 +19,8 @@ services:
 
   startup:
     build: .
+    container_name: moomle-startup
+    restart: "no"
     env_file: .env
     environment:
       POSTGRES_HOST: postgres
@@ -26,6 +28,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - ./src:/app/src
+      - migrationsData:/app/migrations
 
 volumes:
   postgresData:
+  migrationsData:
