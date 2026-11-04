@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, Text
+from sqlalchemy import DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from moomle.database.base import Base
@@ -16,4 +16,9 @@ class Page(Base):
     crawled_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=datetime.now,
+    )
+
+    metadataId: Mapped[int] = mapped_column(
+        ForeignKey("page_metadata.id"),
+        nullable=False
     )

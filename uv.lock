@@ -276,6 +276,12 @@ dev = [
     { name = "pre-commit" },
     { name = "ruff" },
 ]
+setup = [
+    { name = "alembic" },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "python-dotenv" },
+    { name = "sqlalchemy" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -291,6 +297,12 @@ requires-dist = [
 dev = [
     { name = "pre-commit", specifier = ">=4.7.0" },
     { name = "ruff", specifier = ">=0.17.3" },
+]
+setup = [
+    { name = "alembic", specifier = ">=1.20.1" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.3.7" },
+    { name = "python-dotenv", specifier = ">=1.2.4" },
+    { name = "sqlalchemy", specifier = ">=2.1.8" },
 ]
 
 [[package]]

@@ -54,9 +54,63 @@ flowchart TD
 
 The technology stack may evolve throughout development.
 
+## Setup
+
+### Prerequisites
+
+- Docker
+- Docker Compose
+- Git
+
+### Clone the repository
+
+```bash
+git clone https://github.com/ivanrj7j/moomle.git
+cd moomle
+```
+
+### Configure environment variables
+
+Create a `.env` file in the project root:
+
+```env
+POSTGRES_DB=moomle
+POSTGRES_USER=moomle
+POSTGRES_PASSWORD=yourSecurePassword
+POSTGRES_PORT=5432
+POSTGRES_HOST=postgres
+```
+
+**Note:** Inside Docker Compose, `POSTGRES_HOST` should be the PostgreSQL service name, not `localhost`.
+
+### Start the application
+
+```bash
+docker compose up --build -d
+```
+
+Docker Compose will start the required services.
+
+Database migrations should run automatically when the application container starts, ensuring the database schema is up to date.
+
+### Stop the application
+
+```bash
+docker compose down
+```
+
+To remove the database volume and permanently delete its data:
+
+```bash
+docker compose down -v
+```
+
+**Warning:** This permanently deletes the PostgreSQL database data.
+
 ## Core Features
 
 ### Web Crawling
+
 - URL discovery and frontier management
 - HTML and metadata extraction
 - Link extraction and graph construction
@@ -65,6 +119,7 @@ The technology stack may evolve throughout development.
 - Crawl prioritization
 
 ### Information Extraction
+
 - Main content extraction
 - Keyword and keyphrase extraction
 - Named entity recognition
@@ -73,6 +128,7 @@ The technology stack may evolve throughout development.
 - Structured data extraction
 
 ### Search and Indexing
+
 - Full-text search using BM25
 - Semantic search using embeddings
 - Hybrid keyword and vector retrieval
@@ -80,6 +136,7 @@ The technology stack may evolve throughout development.
 - Passage-level retrieval
 
 ### Knowledge Graph
+
 - Page-to-page relationships
 - Entity-to-page relationships
 - Topic associations
