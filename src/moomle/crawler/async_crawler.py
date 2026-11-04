@@ -105,10 +105,3 @@ class AsyncCrawler:
         self._uploadPage(services, content)
 
         return services
-
-
-if __name__ == "__main__":
-    import asyncio
-
-    crawler = AsyncCrawler("https://jujutsu-kaisen.fandom.com/wiki/Jujutsu_Kaisen_Wiki")
-    asyncio.run(crawler.crawl())
