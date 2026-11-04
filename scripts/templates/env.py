@@ -12,7 +12,7 @@ config = context.config
 
 load_dotenv()
 
-database_url = URL.create(
+databaseUrl = URL.create(
     drivername="postgresql+psycopg",
     username=os.getenv("POSTGRES_USER"),
     password=os.getenv("POSTGRES_PASSWORD"),
@@ -23,7 +23,7 @@ database_url = URL.create(
 
 config.set_main_option(
     "sqlalchemy.url",
-    database_url.render_as_string(hide_password=False).replace("%", "%%"),
+    databaseUrl.render_as_string(hide_password=False).replace("%", "%%"),
 )
 
 if config.config_file_name is not None:

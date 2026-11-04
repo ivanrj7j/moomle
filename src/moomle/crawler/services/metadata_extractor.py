@@ -9,11 +9,27 @@ from moomle.database.models import PageMetadata
 
 
 class MetadataExtractorService(Service):
-    def _initTable(self):
+    """Service responsible for extracting page metadata (title, description, favicon, timestamp)."""
+
+    def _initTable(self) -> type[PageMetadata]:
+        """Initializes and returns the PageMetadata SQLAlchemy model.
+
+        Returns:
+            The PageMetadata model class.
+        """
         return PageMetadata
 
     @staticmethod
-    def _safeGetText(soup:BeautifulSoup, selector:str):
+    def _safeGetText(soup: BeautifulSoup, selector: str) -> str | None:
+        """Safely extracts stripped text content of a matched CSS selector.
+
+        Args:
+            soup: Parsed BeautifulSoup HTML document.
+            selector: CSS selector string to query.
+
+        Returns:
+            Extracted text string or None if element is not found.
+        """
         element = soup.select_one(selector)
         if element:
             return element.text
@@ -21,24 +37,34 @@ class MetadataExtractorService(Service):
         return None
 
     @staticmethod
-    def _getFaviconURL(soup:BeautifulSoup, baseURL:URL):
+    def _getFaviconUrl(soup: BeautifulSoup, baseUrl: URL) -> str | None:
+        """Finds and resolves the favicon URL from HTML link tags.
+
+        Args:
+            soup: Parsed BeautifulSoup HTML document.
+            baseUrl: Base URL of the page used to resolve relative paths.
+
+        Returns:
+            Absolute favicon URL string, or None if no favicon link is present.
+        """
         favicon = soup.select_one('link[rel="icon"]')
 
         if favicon:
             url = favicon.get("href")
             if not url:
                 return None
-            
-            parsedURL = urlparse(url)
 
-            if parsedURL.scheme:
+            parsedUrl = urlparse(url)
+
+            if parsedUrl.scheme:
                 return url
-            
-            return urljoin(f"{baseURL.scheme}://{baseURL.host}", url)
+
+            return urljoin(f"{baseUrl.scheme}://{baseUrl.host}", url)
 
         return None
-    
+
     def run(self):
+        """Extracts page metadata from the response and stores it in self.data."""
         url = self.response.url
 
         content = self.response.content.decode()
@@ -46,14 +72,13 @@ class MetadataExtractorService(Service):
 
         title = MetadataExtractorService._safeGetText(soup, "title")
         description = MetadataExtractorService._safeGetText(soup, 'meta[name="description"]')
-        faviconURL = MetadataExtractorService._getFaviconURL(soup, url)
+        faviconUrl = MetadataExtractorService._getFaviconUrl(soup, url)
         parsedAt = time()
 
-        return {
+        self.data = {
             "url": str(url),
             "title": title,
-            "description":description,
-            "faviconURL":faviconURL,
-            "parsedAt":parsedAt
+            "description": description,
+            "faviconURL": faviconUrl,
+            "parsedAt": parsedAt,
         }
-        
