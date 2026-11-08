@@ -1,4 +1,4 @@
-from moomle.run_jobs import RunJobs
+from moomle.crawler.jobs import JobProducer, RunJobs, Worker
 from moomle.tui.run_jobs import PitwallTelemetryUI, TelemetryUI
 
-__all__ = ["RunJobs", "PitwallTelemetryUI", "TelemetryUI"]
+__all__ = ["JobProducer", "RunJobs", "Worker", "PitwallTelemetryUI", "TelemetryUI"]
