@@ -13,7 +13,8 @@ class RunJobs:
     """Orchestrates producer-consumer execution of crawler jobs across concurrent workers.
 
     Acts as the primary data provider for telemetry UI, aggregating and returning live
-    metrics from both the JobProducer and active Worker instances.
+    metrics from both the JobProducer and active Worker instances. Supports graceful shutdown
+    upon keyboard interrupts.
 
     Attributes:
         numWorkers: Number of concurrent worker coroutines to run.
@@ -41,6 +42,7 @@ class RunJobs:
         self.batchSize = batchSize
         self.bufferSize = bufferSize
         self.cap = cap
+        self._isStopping = False
 
         self.producer = JobProducer(
             batchSize=self.batchSize,
@@ -53,6 +55,15 @@ class RunJobs:
             Worker(workerId=i + 1, producer=self.producer, telemetry=self.telemetry)
             for i in range(self.numWorkers)
         ]
+
+    def stop(self) -> None:
+        """Sends stop signals to JobProducer and all active workers."""
+        if self._isStopping:
+            return
+        self._isStopping = True
+        self.producer.stop()
+        for worker in self.workers:
+            worker.stop()
 
     def getTelemetryData(self) -> dict[str, Any]:
         """Gathers and returns a telemetry snapshot of producer stats and active worker states.
@@ -90,21 +101,37 @@ class RunJobs:
     async def run(self) -> int:
         """Launches all workers asynchronously with live telemetry and awaits completion.
 
+        Catches keyboard interrupts and cancels tasks cleanly without raw error tracebacks.
+
         Returns:
             The total number of jobs successfully crawled.
         """
-        with self.telemetry:
-            self.telemetry.logMessage(
-                f"Starting crawler session: {self.numWorkers} workers, "
-                f"batch size {self.batchSize}, buffer {self.bufferSize}, cap {self.cap}",
-                level="INFO",
-            )
-            tasks = [asyncio.create_task(worker.run()) for worker in self.workers]
-            await asyncio.gather(*tasks)
+        tasks: list[asyncio.Task] = []
+        try:
+            with self.telemetry:
+                self.telemetry.logMessage(
+                    f"Starting crawler session: {self.numWorkers} workers, "
+                    f"batch size {self.batchSize}, buffer {self.bufferSize}, cap {self.cap}",
+                    level="INFO",
+                )
+                tasks = [asyncio.create_task(worker.run()) for worker in self.workers]
+                await asyncio.gather(*tasks)
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            self.stop()
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+        finally:
+            self.stop()
 
         return self.producer.completedCount
 
 
 if __name__ == "__main__":
     runner = RunJobs(numWorkers=10, batchSize=10, bufferSize=1000, cap=100)
-    asyncio.run(runner.run())
+    try:
+        asyncio.run(runner.run())
+    except (KeyboardInterrupt, SystemExit):
+        pass

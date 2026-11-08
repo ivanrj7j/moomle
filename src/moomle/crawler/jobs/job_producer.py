@@ -50,6 +50,7 @@ class JobProducer:
         self._completedCount = 0
         self._failedCount = 0
         self._noMoreJobsInDb = False
+        self._stopped = False
         self._refillLock = asyncio.Lock()
         self._refillTask: asyncio.Task | None = None
 
@@ -83,6 +84,19 @@ class JobProducer:
         """Whether a database refill task is actively in flight."""
         return self._refillTask is not None and not self._refillTask.done()
 
+    def stop(self) -> None:
+        """Signals JobProducer to stop and cancels any background database refill task."""
+        self._stopped = True
+        if self._refillTask is not None and not self._refillTask.done():
+            self._refillTask.cancel()
+
+    def _triggerRefill(self) -> None:
+        """Spawns a background task to refill the buffer if one is not already running."""
+        if self._stopped or self._noMoreJobsInDb:
+            return
+        if self._refillTask is None or self._refillTask.done():
+            self._refillTask = asyncio.create_task(self._refillBuffer())
+
     def _fetchJobsFromDb(self, limitCount: int, excludeIds: set[int]) -> list[Job]:
         """Queries the database for pending and oldest jobs, excluding buffered/in-flight IDs.
 
@@ -103,6 +117,9 @@ class JobProducer:
     async def _refillBuffer(self) -> None:
         """Refills the internal job buffer from the database in a non-blocking thread."""
         async with self._refillLock:
+            if self._stopped:
+                return
+
             currentSize = len(self._buffer)
             if currentSize > self.bufferSize // 2:
                 return
@@ -132,6 +149,31 @@ class JobProducer:
                     level="INFO",
                 )
 
+    async def _ensureBuffer(self) -> bool:
+        """Ensures jobs are available in the buffer, initiating and awaiting refills if necessary.
+
+        Returns:
+            True if jobs are available in the buffer, False if stopped or exhausted.
+        """
+        if len(self._buffer) <= self.bufferSize // 2:
+            self._triggerRefill()
+
+        while not self._buffer and not self._stopped:
+            if self._refillTask is not None and not self._refillTask.done():
+                await self._refillTask
+            elif self._noMoreJobsInDb:
+                if not self._inFlightIds:
+                    return False
+                await asyncio.sleep(0.2)
+                self._noMoreJobsInDb = False
+                self._triggerRefill()
+            else:
+                self._triggerRefill()
+                if self._refillTask is not None:
+                    await self._refillTask
+
+        return bool(self._buffer) and not self._stopped
+
     def recordJobResult(self, jobId: int | None, success: bool, errorMsg: str | None = None) -> None:
         """Records the completion of a job crawl and updates internal counters.
 
@@ -151,49 +193,28 @@ class JobProducer:
     async def getJob(self) -> list[Job] | None:
         """Dispatches a batch of jobs (up to batchSize) for a worker to crawl.
 
-        Triggers a database refill whenever the buffer drops to half its capacity.
-        Returns None when the cap is reached or when all jobs are exhausted.
+        Returns None when stopped, when the cap is reached, or when all jobs are exhausted.
 
         Returns:
-            List of Job objects representing the batch to crawl, or None if exhausted.
+            List of Job objects representing the batch to crawl, or None if exhausted/stopped.
         """
+        if self._stopped:
+            return None
+
         if self.cap is not None and self._producedCount >= self.cap:
+            return None
+
+        try:
+            hasJobs = await self._ensureBuffer()
+            if not hasJobs:
+                return None
+        except (asyncio.CancelledError, KeyboardInterrupt):
+            self._stopped = True
             return None
 
         countToTake = self.batchSize
         if self.cap is not None:
-            remainingCap = self.cap - self._producedCount
-            if remainingCap <= 0:
-                return None
-            countToTake = min(countToTake, remainingCap)
-
-        # Trigger background refill when buffer becomes half the size
-        if len(self._buffer) <= self.bufferSize // 2 and not self._noMoreJobsInDb:
-            if self._refillTask is None or self._refillTask.done():
-                self._refillTask = asyncio.create_task(self._refillBuffer())
-
-        # If buffer is empty, wait for refill to complete
-        while not self._buffer:
-            if self._refillTask is not None and not self._refillTask.done():
-                await self._refillTask
-
-            if not self._buffer:
-                if self._noMoreJobsInDb:
-                    # If other workers are still crawling, wait briefly in case they insert new jobs
-                    if self._inFlightIds:
-                        await asyncio.sleep(0.2)
-                        self._noMoreJobsInDb = False
-                        self._refillTask = asyncio.create_task(self._refillBuffer())
-                        await self._refillTask
-                        if not self._buffer and not self._inFlightIds:
-                            return None
-                    else:
-                        return None
-                else:
-                    self._refillTask = asyncio.create_task(self._refillBuffer())
-                    await self._refillTask
-                    if not self._buffer:
-                        return None
+            countToTake = min(countToTake, self.cap - self._producedCount)
 
         batch: list[Job] = []
         while self._buffer and len(batch) < countToTake:
@@ -202,5 +223,9 @@ class JobProducer:
             self._inFlightIds.add(job.id)
             self._producedCount += 1
             batch.append(job)
+
+        # Trigger background refill if buffer dropped to or below half capacity
+        if len(self._buffer) <= self.bufferSize // 2:
+            self._triggerRefill()
 
         return batch if batch else None

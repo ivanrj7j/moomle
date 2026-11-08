@@ -1,5 +1,6 @@
 """Telemetry TUI for Moomle Crawler Jobs consuming data from RunJobs orchestrator."""
 
+import asyncio
 import logging
 import sys
 from collections import deque
@@ -29,7 +30,8 @@ class PitwallTelemetryUI:
 
     Provides a live telemetry dashboard featuring the Moomle logo in Google rainbow
     colors, JobProducer buffer and throughput stats, active worker URL monitoring,
-    and rolling system logs. Receives all live state directly from RunJobs.
+    and rolling system logs. Receives all live state directly from RunJobs and handles
+    shutdown signals cleanly without tracebacks.
 
     Attributes:
         runner: The RunJobs runner instance supplying live telemetry data.
@@ -65,6 +67,7 @@ class PitwallTelemetryUI:
         self.jobsCompleted = 0
         self.jobsFailed = 0
         self.logs: deque[tuple[str, str, str]] = deque(maxlen=6)
+        self._isStopped = False
 
         # File logger setup
         self.logger = logging.getLogger("moomle.tui.run_jobs")
@@ -332,6 +335,7 @@ class PitwallTelemetryUI:
         Returns:
             Self instance.
         """
+        self._isStopped = False
         self.logMessage("🏎️ === Moomle Telemetry Session Started ===", level="INFO")
         self.live = Live(
             get_renderable=self._renderLayout,
@@ -343,9 +347,16 @@ class PitwallTelemetryUI:
         return self
 
     def stop(self) -> None:
-        """Stops the live display and prints the summary banner."""
+        """Stops the live display and prints the summary banner gracefully."""
+        if self._isStopped:
+            return
+        self._isStopped = True
+
         if self.live is not None:
-            self.live.stop()
+            try:
+                self.live.stop()
+            except Exception:
+                pass
             self.live = None
 
         elapsed = max(time() - self.startTime, 0.001)
@@ -369,7 +380,7 @@ class PitwallTelemetryUI:
         banner.append("l", style="bold #34A853")
         banner.append("e", style="bold #EA4335")
         banner.append(
-            f" Crawling Finished! Total Crawled: {completed} | "
+            f" Crawling Stopped! Total Crawled: {completed} | "
             f"Errors: {failed} | Time: {elapsed:.1f}s | Speed: {speed:.2f} crawls/s\n",
             style="bold white",
         )
@@ -379,9 +390,17 @@ class PitwallTelemetryUI:
         """Enters the context manager and starts live telemetry."""
         return self.start()
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        """Exits the context manager and cleans up."""
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any,
+    ) -> bool:
+        """Exits the context manager, stops live display, and suppresses keyboard interrupts."""
         self.stop()
+        if exc_type is not None and issubclass(exc_type, (KeyboardInterrupt, asyncio.CancelledError)):
+            return True
+        return False
 
 
 # Alias for clean and flexible importing
