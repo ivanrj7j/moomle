@@ -164,12 +164,24 @@ The search engine will combine multiple retrieval strategies:
 3. Graph traversal for relationship-based discovery.
 4. Ranking and reranking for final result selection.
 
+## Milestones
+
+| Milestone | Metric |
+|---|---|
+| Pages crawled | **100,000+** |
+| URLs discovered | **10,000,000+** |
+| Crawl throughput | **~7 pages/second** |
+| Total crawl time | **~4 hours** |
+| Architecture | Producer-consumer with concurrent async workers |
+| Multi-instance | Lock-safe concurrent execution via `SELECT ... FOR UPDATE SKIP LOCKED` |
+| Live telemetry | Real-time TUI dashboard with per-worker status and system metrics |
+
 ## Development Roadmap
 
-- [ ] Implement basic web crawler
-- [ ] Implement HTML content extraction
-- [ ] Build URL normalization and deduplication
-- [ ] Integrate PostgreSQL
+- [x] Implement basic web crawler
+- [x] Implement HTML content extraction
+- [x] Build URL normalization and deduplication
+- [x] Integrate PostgreSQL
 - [ ] Implement full-text indexing
 - [ ] Integrate OpenSearch
 - [ ] Implement keyword extraction
@@ -182,7 +194,7 @@ The search engine will combine multiple retrieval strategies:
 - [ ] Develop ranking algorithms
 - [ ] Build search API
 - [ ] Develop search interface
-- [ ] Optimize distributed crawling and indexing
+- [x] Optimize distributed crawling and indexing
 
 ## Educational Purpose
 
