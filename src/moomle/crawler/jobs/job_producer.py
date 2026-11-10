@@ -4,10 +4,10 @@ import asyncio
 from collections import deque
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from moomle.database.connection import SessionLocal
-from moomle.database.models import Job
+from moomle.database.models import Job, JobStatus
 
 
 class JobProducer:
@@ -85,10 +85,33 @@ class JobProducer:
         return self._refillTask is not None and not self._refillTask.done()
 
     def stop(self) -> None:
-        """Signals JobProducer to stop and cancels any background database refill task."""
+        """Signals JobProducer to stop, cancels any background refill task,
+        and releases all buffered/in-flight jobs back to PENDING in the database."""
         self._stopped = True
         if self._refillTask is not None and not self._refillTask.done():
             self._refillTask.cancel()
+        self._releaseWorkingJobs()
+
+    def _releaseWorkingJobs(self) -> None:
+        """Resets all buffered and in-flight jobs back to PENDING in the database.
+
+        Called during graceful shutdown so that jobs claimed by this instance
+        are not permanently stuck as WORKING.
+        """
+        jobIds = self._bufferedIds | self._inFlightIds
+        if not jobIds:
+            return
+        try:
+            with SessionLocal() as session:
+                session.execute(
+                    update(Job)
+                    .where(Job.id.in_(jobIds))
+                    .where(Job.status == JobStatus.WORKING)
+                    .values(status=JobStatus.PENDING)
+                )
+                session.commit()
+        except Exception:
+            pass  # Best-effort during shutdown
 
     def _triggerRefill(self) -> None:
         """Spawns a background task to refill the buffer if one is not already running."""
@@ -98,21 +121,36 @@ class JobProducer:
             self._refillTask = asyncio.create_task(self._refillBuffer())
 
     def _fetchJobsFromDb(self, limitCount: int, excludeIds: set[int]) -> list[Job]:
-        """Queries the database for pending and oldest jobs, excluding buffered/in-flight IDs.
+        """Queries the database for PENDING jobs, excluding buffered/in-flight IDs,
+        and atomically marks them as WORKING to prevent other instances from claiming them.
+
+        Uses SELECT ... FOR UPDATE SKIP LOCKED to ensure safe concurrent access
+        across multiple instances.
 
         Args:
             limitCount: Maximum number of job rows to fetch.
             excludeIds: Set of job primary keys to exclude from the query.
 
         Returns:
-            List of fetched Job model instances.
+            List of fetched Job model instances (now marked WORKING in the database).
         """
         with SessionLocal() as session:
-            query = select(Job)
+            query = select(Job).where(Job.status == JobStatus.PENDING)
             if excludeIds:
                 query = query.where(~Job.id.in_(excludeIds))
-            query = query.order_by(Job.status, Job.last_update).limit(limitCount)
-            return list(session.scalars(query).all())
+            query = (
+                query.order_by(Job.last_update)
+                .limit(limitCount)
+                .with_for_update(skip_locked=True) # avoiding duplicate jobs
+            )
+            jobs = list(session.scalars(query).all())
+
+            if jobs:
+                for job in jobs:
+                    job.status = JobStatus.WORKING
+                session.commit()
+
+            return jobs
 
     async def _refillBuffer(self) -> None:
         """Refills the internal job buffer from the database in a non-blocking thread."""

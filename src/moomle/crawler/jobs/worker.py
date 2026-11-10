@@ -147,6 +147,7 @@ class Worker:
                 with SessionLocal() as session:
                     job = session.get(Job, jobId)
                     if job:
+                        job.status = JobStatus.PENDING
                         job.last_update = time()
                         session.commit()
             duration = time() - startTime

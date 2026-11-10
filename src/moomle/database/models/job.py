@@ -10,6 +10,7 @@ from moomle.database.base import Base
 
 class JobStatus(str, Enum):
     PENDING = "PENDING"
+    WORKING = "WORKING"
     DONE = "DONE"
 
 
