@@ -12,6 +12,6 @@ COPY adservers_seed.txt ./
 
 ENV PYTHONPATH=/app/src:/app
 
-RUN uv sync --frozen --only-group setup
+RUN uv sync --frozen
 
-CMD ["uv", "run", "--only-group", "setup", "python", "scripts/migrate.py"]
+CMD ["uv", "run", "python", "scripts/migrate.py"]
